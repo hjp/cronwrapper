@@ -36,7 +36,7 @@ def remove(path):
     except:
         pass
 
-basename = os.path.basename(sys.argv[0])
+basename = os.path.basename(sys.argv[1])
 logdir = os.path.join(os.environ["HOME"], "log", "cronwrapper", basename)
 os.makedirs(logdir, exist_ok=True)
 
