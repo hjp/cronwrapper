@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+
+import os.path
+import sys
+import time
+
+def check_cronwrapper(dir):
+    try:
+        ok_time = os.path.getmtime(os.path.join(dir, "ok"))
+    except FileNotFoundError:
+        ok_time = None
+    try:
+        fail_time = os.path.getmtime(os.path.join(dir, "fail"))
+    except FileNotFoundError:
+        fail_time = None
+    try:
+        fail_sticky_time = os.path.getmtime(os.path.join(dir, "fail_sticky"))
+    except FileNotFoundError:
+        fail_sticky_time = None
+
+    if fail_time:
+        fail_ftime = time.strftime("%Y-%m-%d %H:%M:%S%z", time.localtime(fail_time))
+        return ("CRITICAL", "%s failed at %s" % (dir, fail_ftime))
+    if fail_sticky_time:
+        ok_ftime = time.strftime("%Y-%m-%d %H:%M:%S%z", time.localtime(ok_time))
+        fail_sticky_ftime = time.strftime("%Y-%m-%d %H:%M:%S%z", time.localtime(fail_sticky_time))
+        return ("WARNING", "%s succeeded at %s, but failed at %s" % (dir, ok_ftime, fail_sticky_ftime))
+    if ok_time:
+        ok_ftime = time.strftime("%Y-%m-%d %H:%M:%S%z", time.localtime(ok_time))
+        return ("OK", "%s succeeded at %s" % (dir, ok_ftime))
+
+    return ("UNKNOWN", "%s doesn't contain a cronwrapper status" % (dir,))
+
+name = os.path.basename(sys.argv[0])
+codes = { "OK": 0, "WARNING": 1, "CRITICAL": 2, "UNKNOWN": 3 }
+
+(status, message) = check_cronwrapper(sys.argv[1])
+print("%s %s - %s" % (name, status, message))
+sys.exit(codes[status])
+
+# vim: tw=99
