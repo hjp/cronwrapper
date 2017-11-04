@@ -1,0 +1,5 @@
+{
+    "command": [ "echo", "hello", "world" ],
+    "out": [ [ "hello", "FAIL" ] ],
+    "rc": [ [ "^0$", "OK_STICKY" ] ]
+}
