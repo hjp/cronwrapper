@@ -3,7 +3,7 @@ echo 1
 sleep 1
 echo 2
 sleep 2
-echo "an error message" 2>&1
+echo "an error message" >&2
 echo 3
 echo done
 exit 0
