@@ -6,10 +6,43 @@ status file which can easily be checked for by icinga.
 """
 
 import datetime
+from   enum import IntEnum
+import json
 import os
+import os.path
+import re
 import sys
 import subprocess
 import threading
+
+class State(IntEnum):
+    """
+    Possible states: The values are not arbitrary: They need to be ascending in
+    that order and the ok and fail values need to be even and odd, respectively.
+    """
+    OK = 0,
+    FAIL = 1,
+    OK_STICKY = 2,
+    FAIL_STICKY = 3
+
+
+def update_state(label, line):
+    for f in filter[label]:
+        if re.search(f[0], line):
+            with state_lock:
+                global state
+                if f[1] > state:
+                    state = f[1]
+                    logfh.write(
+                            bytes(
+                                "ctl" + " " +
+                                datetime.datetime.today().isoformat() + " " +
+                                "new state: " + state.name + 
+                                "\n", 
+                                encoding="utf-8"
+                            )
+                          )
+            return
 
 def write_output(fh, label):
     for line in fh:
@@ -21,7 +54,7 @@ def write_output(fh, label):
                 ) +
                 line
               )
-        output_seen[label] = True
+        update_state(label, line)
 
 def touch(path):
     try:
@@ -36,20 +69,42 @@ def remove(path):
     except:
         pass
 
-basename = os.path.basename(sys.argv[1])
-logdir = os.path.join(os.environ["HOME"], "log", "cronwrapper", basename)
-os.makedirs(logdir, exist_ok=True)
+filter = { "err": [ (rb".*", State.FAIL) ],
+           "out": [ (rb".*", State.OK) ],
+           "rc":  [ (rb"^0$", State.OK), (rb".*", State.FAIL) ],
+         }
+if os.path.isdir(sys.argv[1]):
+    logdir = sys.argv[1]
+    with open(os.path.join(logdir, "config.json")) as f:
+        config = json.load(f)
+    command = config["command"]
+    for filter_section in ("err", "out", "rc"):
+        if filter_section in config:
+            filter[filter_section] = config[filter_section] + filter[filter_section]
+            for f in filter[filter_section]:
+                if type(f[0]) == str:
+                    f[0] = bytes(f[0], "utf-8")
+                if type(f[1]) == str:
+                    f[1] = State[f[1]]
+
+else:
+    basename = os.path.basename(sys.argv[1])
+    logdir = os.path.join(os.environ["HOME"], "log", "cronwrapper", basename)
+    os.makedirs(logdir, exist_ok=True)
+    command = sys.argv[1:]
 
 logfile = os.path.join(logdir, datetime.datetime.today().isoformat() + ".log")
 output_seen = {}
 
 with open(logfile, mode='wb', buffering=0) as logfh:
 
-    with subprocess.Popen(sys.argv[1:],
+    state = State.OK
+    with subprocess.Popen(command,
                           stdin=subprocess.DEVNULL,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE
          ) as p:
+        state_lock = threading.Lock()
         to = threading.Thread(target=write_output, args=(p.stdout, 'out'))
         to.start()
         te = threading.Thread(target=write_output, args=(p.stderr, 'err'))
@@ -66,16 +121,17 @@ with open(logfile, mode='wb', buffering=0) as logfh:
                     encoding="utf-8"
                 )
               )
-statusfile = os.path.join(logdir, "status")
+        line = bytes(str(rc), "utf-8") # pretend 
+        update_state("rc", line)
 
-if rc == 0 and "err" not in output_seen:
+if state & 1 == 0:
     touch(os.path.join(logdir, "ok"))
     remove(os.path.join(logdir, "fail"))
 else:
     touch(os.path.join(logdir, "fail"))
     remove(os.path.join(logdir, "ok"))
     touch(os.path.join(logdir, "fail_sticky"))
-sys.exit(0)
+sys.exit(state & 1)
 
 
 # vim: tw=79
