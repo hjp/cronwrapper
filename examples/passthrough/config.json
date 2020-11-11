@@ -1,0 +1,5 @@
+{
+    "command": [ "sh", "-c", "echo error 1 >&2; echo output; echo error 2 >&2" ],
+    "passthrough_stdout": true
+}
+
