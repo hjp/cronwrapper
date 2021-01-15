@@ -75,6 +75,7 @@ filter = { "err": [ (rb".*", State.FAIL) ],
            "out": [ (rb".*", State.OK) ],
            "rc":  [ (rb"^0$", State.OK), (rb".*", State.FAIL) ],
          }
+passthrough_stdout = False
 if os.path.isdir(sys.argv[1]):
     logdir = sys.argv[1]
     with open(os.path.join(logdir, "config.json")) as f:
