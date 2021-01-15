@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import argparse
 import os.path
 import sys
 import time
@@ -31,11 +32,25 @@ def check_cronwrapper(dir):
 
     return ("UNKNOWN", "%s doesn't contain a cronwrapper status" % (dir,))
 
-name = os.path.basename(sys.argv[0])
+if "nagios" in sys.argv[0]:
+    format = "nagios"
+else:
+    format = "check_mk"
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--format", default=format, choices=["check_mk", "nagios", ])
+ap.add_argument("--service-name", default=os.path.basename(sys.argv[0]))
+ap.add_argument("directory")
+args = ap.parse_args()
+
+
 codes = { "OK": 0, "WARNING": 1, "CRITICAL": 2, "UNKNOWN": 3 }
 
-(status, message) = check_cronwrapper(sys.argv[1])
-print("%s %s - %s" % (name, status, message))
+(status, message) = check_cronwrapper(args.directory)
+if args.format == "nagios":
+    print("%s %s - %s" % (args.service_name, status, message))
+elif args.format == "check_mk":
+    print("%d %s - %s" % (codes[status], args.service_name, message))
 sys.exit(codes[status])
 
 # vim: tw=99
