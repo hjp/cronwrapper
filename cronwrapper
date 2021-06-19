@@ -71,6 +71,67 @@ def remove(path):
     except:
         pass
 
+def run():
+    global state
+
+    logfile = os.path.join(logdir, datetime.datetime.today().isoformat() + ".log")
+    with open(logfile, mode='wb', buffering=0) as logfh:
+        if min_free_pct:
+            # Bail out early if disk is full
+            s = os.statvfs(logdir)
+            available_pct = s.f_bavail / s.f_blocks * 100
+            if available_pct < min_free_pct:
+                logfh.write(
+                        bytes(
+                            "ctl" + " " +
+                            datetime.datetime.today().isoformat() + " " +
+                            f"Disk almost full ({available_pct:.1f}% free)" + 
+                            "\n",
+                            encoding="utf-8"
+                        )
+                      )
+                state = State.FAIL
+                return
+
+        state = State.OK
+        try:
+            state_lock = threading.Lock()
+            with subprocess.Popen(command,
+                                  stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE
+                 ) as p:
+                to = threading.Thread(target=write_output, args=(p.stdout, 'out', passthrough_stdout))
+                to.start()
+                te = threading.Thread(target=write_output, args=(p.stderr, 'err'))
+                te.start()
+                rc = p.wait()
+                to.join()
+                te.join()
+                logfh.write(
+                        bytes(
+                            "ctl" + " " +
+                            datetime.datetime.today().isoformat() + " " +
+                            "command returned %s" % (rc) + 
+                            "\n",
+                            encoding="utf-8"
+                        )
+                      )
+                line = bytes(str(rc), "utf-8") # pretend 
+                update_state("rc", line)
+        except Exception as e:
+            logfh.write(
+                    bytes(
+                        "ctl" + " " +
+                        datetime.datetime.today().isoformat() + " " +
+                        "caught exception %s" % (e) + 
+                        "\n",
+                        encoding="utf-8"
+                    )
+                  )
+            update_state("rc", bytes(str(e), "utf-8"))
+
+
 filter = { "err": [ (rb".*", State.FAIL) ],
            "out": [ (rb".*", State.OK) ],
            "rc":  [ (rb"^0$", State.OK), (rb".*", State.FAIL) ],
@@ -90,55 +151,15 @@ if os.path.isdir(sys.argv[1]):
                 if type(f[1]) == str:
                     f[1] = State[f[1]]
     passthrough_stdout = config.get("passthrough_stdout")
-
+    min_free_pct = config.get("min_free_pct", 1)
 else:
     basename = os.path.basename(sys.argv[1])
     logdir = os.path.join(os.environ["HOME"], "log", "cronwrapper", basename)
     os.makedirs(logdir, exist_ok=True)
     command = sys.argv[1:]
+    min_free_pct = 1
 
-logfile = os.path.join(logdir, datetime.datetime.today().isoformat() + ".log")
-output_seen = {}
-
-with open(logfile, mode='wb', buffering=0) as logfh:
-
-    state = State.OK
-    try:
-        state_lock = threading.Lock()
-        with subprocess.Popen(command,
-                              stdin=subprocess.DEVNULL,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE
-             ) as p:
-            to = threading.Thread(target=write_output, args=(p.stdout, 'out', passthrough_stdout))
-            to.start()
-            te = threading.Thread(target=write_output, args=(p.stderr, 'err'))
-            te.start()
-            rc = p.wait()
-            to.join()
-            te.join()
-            logfh.write(
-                    bytes(
-                        "ctl" + " " +
-                        datetime.datetime.today().isoformat() + " " +
-                        "command returned %s" % (rc) + 
-                        "\n",
-                        encoding="utf-8"
-                    )
-                  )
-            line = bytes(str(rc), "utf-8") # pretend 
-            update_state("rc", line)
-    except Exception as e:
-        logfh.write(
-                bytes(
-                    "ctl" + " " +
-                    datetime.datetime.today().isoformat() + " " +
-                    "caught exception %s" % (e) + 
-                    "\n",
-                    encoding="utf-8"
-                )
-              )
-        update_state("rc", bytes(str(e), "utf-8"))
+run()
 
 if state & 1 == 0:
     touch(os.path.join(logdir, "ok"))
