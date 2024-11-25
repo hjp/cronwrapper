@@ -72,7 +72,7 @@ def remove(path):
         pass
 
 def run():
-    global state
+    global state, state_lock, logfh
 
     logfile = os.path.join(logdir, datetime.datetime.today().isoformat() + ".log")
     with open(logfile, mode='wb', buffering=0) as logfh:
