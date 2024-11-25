@@ -46,14 +46,21 @@ def update_state(label, line):
 
 def write_output(fh, label, passthrough=False):
     for line in fh:
-        logfh.write(
-                bytes(
-                    label + " " +
-                    datetime.datetime.today().isoformat() + " ",
-                    encoding="utf-8"
-                ) +
-                line
-              )
+        logline = (
+            bytes(
+                label + " " +
+                datetime.datetime.today().isoformat() + " ",
+                encoding="utf-8"
+            ) +
+            line
+        )
+        written = False
+        while not written:
+            try:
+                logfh.write(logline)
+                written = True
+            except OSError:
+                time.sleep(1)
         update_state(label, line)
         if passthrough:
             sys.stdout.buffer.write(line)
